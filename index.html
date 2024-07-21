@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - interactive particles</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="main.css">
+	</head>
+
+	<body>
+
+        <div id="controls" style="position: absolute; z-index: 10; background-color: rgba(44, 41, 41, 0.6);
+        border: 1px solid rgba(102, 99, 99, 0.715); display: flex; gap: 20px; justify-content: center; align-items: center;
+        width: 250px; height: 50px; bottom: 50px; right: 50px; border-radius: 50px;">
+
+        <button id="play" class="button">
+            <svg width="20px" height="20px" style="fill: white;margin-left:2px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512">!Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.<path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80L0 432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg>
+            <!-- <svg xmlns="http://www.w3.org/2000/svg" width="20px" height="20px" viewBox="0 0 384 512">!Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.<path fill="#ffffff" d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80L0 432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg> -->
+        </button>
+
+        <button id="pause" disabled class="button">
+            <svg width="20px" height="20px" style="fill: white; position:relative;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--!Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M48 64C21.5 64 0 85.5 0 112L0 400c0 26.5 21.5 48 48 48l32 0c26.5 0 48-21.5 48-48l0-288c0-26.5-21.5-48-48-48L48 64zm192 0c-26.5 0-48 21.5-48 48l0 288c0 26.5 21.5 48 48 48l32 0c26.5 0 48-21.5 48-48l0-288c0-26.5-21.5-48-48-48l-32 0z"/></svg>
+        </button>
+
+        <button id="restart" class="button">
+            <svg width="20px" height="20px" style="fill: white; position:relative;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--!Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2024 Fonticons, Inc.--><path d="M463.5 224l8.5 0c13.3 0 24-10.7 24-24l0-128c0-9.7-5.8-18.5-14.8-22.2s-19.3-1.7-26.2 5.2L413.4 96.6c-87.6-86.5-228.7-86.2-315.8 1c-87.5 87.5-87.5 229.3 0 316.8s229.3 87.5 316.8 0c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0c-62.5 62.5-163.8 62.5-226.3 0s-62.5-163.8 0-226.3c62.2-62.2 162.7-62.5 225.3-1L327 183c-6.9 6.9-8.9 17.2-5.2 26.2s12.5 14.8 22.2 14.8l119.5 0z"/></svg>
+        </button>
+
+        </div>
+        <div id="container">
+            <!-- <h1 style="background-color: transparent !important; position: relative;">Diwali Mela</h1> -->
+        </div>
+
+		<script type="x-shader/x-vertex" id="vertexshader">
+
+			attribute float size;
+			attribute vec3 customColor;
+
+			varying vec3 vColor;
+
+			void main() {
+
+				vColor = customColor;
+
+				vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
+
+				gl_PointSize = size * ( 500.0 / -mvPosition.z );
+
+				gl_Position = projectionMatrix * mvPosition;
+
+			}
+
+		</script>
+
+		<script type="x-shader/x-fragment" id="fragmentshader">
+
+			uniform vec3 color;
+			uniform sampler2D pointTexture;
+			uniform float alphaTest;
+            uniform float zColor;
+
+			varying vec3 vColor;
+
+			void main() {
+
+				gl_FragColor = vec4( (color * vColor).x, (color * vColor).y, abs(sin(zColor*0.05)), 1 );
+
+				gl_FragColor = gl_FragColor * texture2D( pointTexture, gl_PointCoord );
+			}
+
+		</script>
+
+		<script type="importmap">
+            {
+              "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@v0.166.1/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@v0.166.1/examples/jsm/"
+              }
+            }
+          </script>
+
+		<script type="module">
+
+			import * as THREE from 'three';
+            import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+			import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+			import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+            import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
+			import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+            import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+
+			//import Stats from 'three/addons/libs/stats.module.js';
+
+			import * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';
+
+			let renderer, scene, camera, stats, composer;
+            let flame, paper, flame2, orgmat, paper2, orgmat2
+            let model, model2
+            let scalef, scalef2
+            let playing = false
+            let orgpos = new THREE.Vector3(-150,30,-20)
+            let orgpos2 = new THREE.Vector3(-25,-10,-20)
+
+			let particles, particles2, particles3
+            let PARTICLE_SIZE
+
+            if (window.innerWidth > 600){
+                PARTICLE_SIZE = 10 / window.innerWidth * window.innerHeight;
+            } else {
+                PARTICLE_SIZE = 2 / window.innerWidth * window.innerHeight;
+
+            }
+
+
+            console.log(window.innerHeight, window.innerWidth)
+
+			let raycaster, intersects;
+            let material, material2, material3
+            let zColor = 0; 
+			let pointer, INTERSECTED;
+            let darkMaterial = new THREE.MeshBasicMaterial({color: 0x000000});
+            // let orgmat=new THREE.MeshBasicMaterial({color: "red", opacity:0.9});
+            let lightMaterial = new THREE.MeshStandardMaterial({emissive: new THREE.Color("orange"),color: new THREE.Color("yellow"), emissiveIntensity : 5});
+
+			init();
+
+			function init() {
+
+				const container = document.getElementById( 'container' );
+
+				scene = new THREE.Scene();
+
+				camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 10000 );
+				camera.position.z = 250;
+                
+                const loader = new GLTFLoader()
+                loader.load( 'lantern.glb', async function ( gltf ) {
+                    
+                    model = gltf.scene;
+                    const light = new THREE.AmbientLight( 0xD9D9D9 ); // soft white light
+                    model.add( light );
+
+                    model.traverse( function( node ) {
+
+                    if ( node instanceof THREE.Mesh && node.name === "Cylinder002" ) {
+
+                        flame = node
+                        console.log(node)
+
+                        // insert your code here, for example:
+                        // node.material = new THREE.MeshNormalMaterial()
+
+                    }
+
+                    if ( node instanceof THREE.Mesh && node.name === "Cube" ) {
+
+                        paper = node
+                        orgmat = node.material
+                        orgmat.transparent = true
+                        orgmat.opacity = 0.9
+                        console.log(node)
+
+                        // insert your code here, for example:
+                        // node.material = new THREE.MeshNormalMaterial()
+
+                    }
+
+                    } );
+
+                    // wait until the model can be added to the scene without blocking due to shader compilation
+
+                    await renderer.compileAsync( model, camera, scene );
+                    scalef = 25
+
+                    model.position.copy(orgpos)
+                    // orgpos = model.position
+                    model.scale.set(scalef,scalef,scalef)
+                    model.rotateY(-Math.PI/4)
+                    model.rotateX(-Math.PI/25)
+
+                    scene.add( model );
+
+                    // render();
+    
+                } );
+
+                loader.load( 'lantern2.glb', async function ( gltf ) {
+                    
+                    model2 = gltf.scene;
+                    const light = new THREE.AmbientLight( 0xD9D9D9 ); // soft white light
+                    model2.add( light );
+
+                    model2.traverse( function( node ) {
+
+                    if ( node instanceof THREE.Mesh && node.name === "Cylinder002" ) {
+
+                        flame2 = node
+                        console.log(node)
+
+                        // insert your code here, for example:
+                        // node.material = new THREE.MeshNormalMaterial()
+
+                    }
+
+                    if ( node instanceof THREE.Mesh && node.name === "Cube" ) {
+
+                        paper2 = node
+                        orgmat2 = node.material
+                        orgmat2.transparent = true
+                        orgmat2.opacity = 0.9
+                        console.log(node)
+
+                        // insert your code here, for example:
+                        // node.material = new THREE.MeshNormalMaterial()
+
+                    }
+
+
+                    } );
+
+                    // wait until the model can be added to the scene without blocking due to shader compilation
+
+                    await renderer.compileAsync( model2, camera, scene );
+                    scalef2 = 18
+
+                    model2.position.copy(orgpos2)
+                    model2.scale.set(scalef2,scalef2,scalef2)
+                    model2.rotateY(-Math.PI/4)
+                    // orgpos2 = model2.position
+                    model2.rotateX(Math.PI/25)
+
+                    scene.add( model2 );
+
+                    // render();
+    
+                } );
+
+                // console.log(orgpos, orgpos2)
+
+
+				//
+
+				// let boxGeometry = new THREE.DodecahedronGeometry(50,5); 
+				let boxGeometry = new THREE.RingGeometry(window.innerWidth/4,10, 25,20, 4.81, 6.29);
+				let boxGeometry2 = new THREE.RingGeometry(window.innerWidth/8,12, 25,20, 4.81, 6.9);
+				let boxGeometry3 = new THREE.RingGeometry(window.innerWidth/3,4, 25,10, 4.81, 6.29);
+
+
+
+				// if normal and uv attributes are not removed, mergeVertices() can't consolidate indentical vertices with different normal/uv data
+                // console.log(boxGeometry.getAttribute( 'position' ))
+
+				// boxGeometry.deleteAttribute( 'normal' );
+				// boxGeometry.deleteAttribute( 'uv' );
+
+                // console.log(boxGeometry.getAttribute( 'position' ))
+
+				// boxGeometry = BufferGeometryUtils.mergeVertices( boxGeometry );
+
+				//
+
+				const positionAttribute = boxGeometry.getAttribute( 'position' );
+				const positionAttribute2 = boxGeometry2.getAttribute( 'position' );
+				const positionAttribute3 = boxGeometry2.getAttribute( 'position' );
+                console.log(positionAttribute)
+
+				let colors = [] 
+                let colors2 = [];
+                let colors3 = [];
+				let sizes  = [] 
+                let sizes2 = [];
+                let sizes3 = [];
+                
+				const color = new THREE.Color();
+                
+				for ( let i = 0, l = positionAttribute.count; i < l; i ++ ) {
+                    
+                    color.setHSL( 0.2 + ( i / l ), 1, 0.5);
+					color.toArray( colors, i * 3 );
+                    // console.log(colors)
+                    
+					sizes[ i ] = PARTICLE_SIZE * (i/l);
+                    
+				}
+				for ( let i = 0, l = positionAttribute2.count; i < l; i ++ ) {
+                    
+                    color.setHSL( 0.2 + ( i / l ), 1, 0.5);
+					color.toArray( colors2, i * 3 );
+                    // console.log(colors)
+                    
+					sizes2[ i ] = PARTICLE_SIZE * (i/l);
+                    
+				}
+
+                for ( let i = 0, l = positionAttribute3.count; i < l; i ++ ) {
+                    
+                    color.setHSL( 0.2 + ( i / l ), 1, 0.5);
+					color.toArray( colors3, i * 3 );
+                    // console.log(colors)
+                    
+					sizes3[ i ] = PARTICLE_SIZE * (i/l);
+                    
+				}
+                colors2 = colors2.map(v => 1.2);
+                sizes2 = sizes2.map(v => v * 0.8);
+
+                colors3 = colors3.map(v => 0.9);
+                sizes3 = sizes3.map(v => v * 1.1);
+                
+				const geometry = new THREE.BufferGeometry();
+				geometry.setAttribute( 'position', positionAttribute );
+				geometry.setAttribute( 'customColor', new THREE.Float32BufferAttribute( colors, 3 ) );
+				geometry.setAttribute( 'size', new THREE.Float32BufferAttribute( sizes, 1 ) );
+
+				const geometry2 = new THREE.BufferGeometry();
+				geometry2.setAttribute( 'position', positionAttribute2 );
+				geometry2.setAttribute( 'customColor', new THREE.Float32BufferAttribute( colors2, 3 ) );
+				geometry2.setAttribute( 'size', new THREE.Float32BufferAttribute( sizes2, 1 ) );
+
+				const geometry3 = new THREE.BufferGeometry();
+				geometry3.setAttribute( 'position', positionAttribute2 );
+				geometry3.setAttribute( 'customColor', new THREE.Float32BufferAttribute( colors3, 3 ) );
+				geometry3.setAttribute( 'size', new THREE.Float32BufferAttribute( sizes3, 1 ) );
+
+				//
+
+				material = new THREE.ShaderMaterial( {
+
+					uniforms: {
+						color: { value: new THREE.Color( 'yellow' ) },
+						pointTexture: { value: new THREE.TextureLoader().load( 'textures/sprites/disc.png' ) },
+                        zColor: {value: zColor},
+						// alphaTest: { value: 0.3 }
+					},
+					vertexShader: document.getElementById( 'vertexshader' ).textContent,
+					fragmentShader: document.getElementById( 'fragmentshader' ).textContent,
+                    
+
+				} );
+				material2 = new THREE.ShaderMaterial( {
+
+					uniforms: {
+						color: { value: new THREE.Color( 'green' ) },
+						pointTexture: { value: new THREE.TextureLoader().load( 'textures/sprites/disc.png' ) },
+                        zColor: {value: zColor + 0.3},
+						// alphaTest: { value: 0.3 }
+					},
+					vertexShader: document.getElementById( 'vertexshader' ).textContent,
+					fragmentShader: document.getElementById( 'fragmentshader' ).textContent
+
+				} );
+				material3 = new THREE.ShaderMaterial( {
+
+					uniforms: {
+						color: { value: new THREE.Color( 'purple' ) },
+						pointTexture: { value: new THREE.TextureLoader().load( 'textures/sprites/disc.png' ) },
+                        zColor: {value: zColor+0.5},
+						// alphaTest: { value: 0.3 }
+					},
+					vertexShader: document.getElementById( 'vertexshader' ).textContent,
+					fragmentShader: document.getElementById( 'fragmentshader' ).textContent
+
+				} );
+                
+				//
+
+				particles = new THREE.Points( geometry, material );
+				particles2 = new THREE.Points( geometry2, material2 );
+				particles3 = new THREE.Points( geometry3, material3 );
+				scene.add( particles );
+				scene.add( particles2 );
+
+                particles3.rotateZ(Math.PI/4)
+				scene.add( particles3 );
+                // scene.fog = new THREE.Fog(  0x000000, 100, 500 );
+
+
+				//
+
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio( window.devicePixelRatio );
+                renderer.toneMapping = THREE.ReinhardToneMapping;
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.setAnimationLoop( animate );
+				container.appendChild( renderer.domElement );
+
+                const renderScene = new RenderPass( scene, camera );
+
+				const bloomPass = new UnrealBloomPass( new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85 );
+				bloomPass.threshold = 0;
+				bloomPass.strength = 0.6;
+				bloomPass.radius = 0.2
+
+				const outputPass = new OutputPass();
+
+				composer = new EffectComposer( renderer );
+				composer.addPass( renderScene );
+
+                // console.log(paper, paper.object)
+                // outlinePass = new OutlinePass( new THREE.Vector2( window.innerWidth, window.innerHeight ), scene, camera );
+				// composer.addPass( outlinePass );
+				composer.addPass( bloomPass );
+				composer.addPass( outputPass );
+                
+                // outlinePass.selectedObjects = [paper,paper2]
+
+				//
+
+				// raycaster = new THREE.Raycaster();
+				// pointer = new THREE.Vector2();
+
+				//
+
+				// stats = new Stats();
+				// container.appendChild( stats.dom );
+
+				//
+
+				window.addEventListener( 'resize', onWindowResize );
+
+			}
+
+			function onWindowResize() {
+                console.log(window.innerHeight, window.innerWidth)
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+                // renderer.render( scene, camera );
+                render()
+
+			}
+
+			function animate() {
+
+				render();
+                
+				// stats.update();
+
+			}
+            // let newscale = new THREE.Vector3(0,0,0)
+            // let scaleft = scalef + 0.2
+            // let scaleft2 = scalef2 + 0.2
+
+			function render() {
+
+				// particles.rotation.x += 0.0005;
+				particles.rotation.z += 0.0025;
+				particles2.rotation.z -= 0.0025;
+				particles3.rotation.z -= 0.0015;
+                // console.log(material.userData)
+                // const shader = material.userData.shader;
+
+                material.uniforms.zColor.value += 0.5
+                material2.uniforms.zColor.value += 0.5
+                material3.uniforms.zColor.value += 0.5
+
+
+                if (playing === true && model && model2){
+                    // console.log(model, model2)
+                    model.position.y += 0.05
+                    model.position.z -= 0.05
+                    model.position.x -= 0.05
+                    model2.position.y += 0.03
+                    model2.position.z -= 0.05
+                    model2.position.x += 0.03
+
+                    
+                    // newscale.x = Math.random() * 0.001
+                    // // console.log(flame.scale)
+                    // newscale.y = Math.random() * 0.001
+                    // newscale.z = Math.random() * 0.001
+
+                    // flame.scale.set((flame.scale.x + newscale.x) , (flame.scale.y + newscale.y), (flame.scale.z + newscale.z))
+                }
+
+				// renderer.render( scene, camera );
+                if (flame){
+                    flame.material = darkMaterial
+                    flame2.material = darkMaterial
+                    paper.material = darkMaterial
+                    paper2.material = darkMaterial
+                    composer.render();
+                    flame.material = lightMaterial
+                    flame2.material = lightMaterial
+                    paper.material = orgmat
+                    paper2.material = orgmat2
+                }
+                composer.render();
+
+			}
+
+            function reset(){
+                playing = false
+                document.getElementById("pause").disabled = true
+                document.getElementById("play").disabled = false
+                model.position.copy(orgpos)
+                model2.position.copy(orgpos2)
+            }
+
+            function play(){
+                // console.log("called")
+                document.getElementById("play").disabled = true
+                document.getElementById("pause").disabled = false
+                playing = true
+            }
+
+            function pause(){
+                document.getElementById("pause").disabled = true
+                document.getElementById("play").disabled = false
+                playing = false
+            }
+
+            document.getElementById("play").addEventListener("click", play)
+            document.getElementById("pause").addEventListener("click", pause)
+            document.getElementById("restart").addEventListener("click", reset)
+
+		</script>
+
+	</body>
+
+</html>
