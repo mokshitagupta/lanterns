@@ -134,7 +134,7 @@
 				camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 10000 );
 				camera.position.z = 250;
                 
-                const loader = new GLTFLoader()
+                const loader = new GLTFLoader().setPath("./models/")
                 loader.load( 'lantern.glb', async function ( gltf ) {
                     
                     model = gltf.scene;
